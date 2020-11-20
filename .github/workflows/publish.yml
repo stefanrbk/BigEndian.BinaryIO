@@ -1,0 +1,36 @@
+name: 'Publish NuGet Package'
+
+env:
+  DOTNET_CORE_SDK_VERSION: 5.0.100
+  SOLUTION_PATH: './BigEndian System.IO.sln'
+  NUGET_ACCESS_TOKEN: ${{ secrets.NUGET_KEY }}
+  
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup .NET Core
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: '${{ env.DOTNET_CORE_SDK_VERSION }}'
+      - name: Install dependencies
+        run: dotnet restore '${{ env.SOLUTION_PATH }}' --verbosity quiet
+      - name: Build
+        run: dotnet build '${{ env.SOLUTION_PATH }}' --nologo --verbosity minimal --configuration Release --no-restore
+      - name: Pack
+        run: dotnet pack '${{ env.SOLUTION_PATH }}' --output './nuget-packages' --verbosity minimal --configuration Release --no-build
+      - name: Save NuGet package
+        uses: actions/upload-artifact@v2
+        with:
+          name: nuget-packages
+          path: './nuget-packages/*/**'
+      - name: Upload NuGet packages
+        run: dotnet nuget push './**/*.nupkg' -s https://api.nuget.org/v3/index.json --skip-duplicate -k ${{ env.NUGET_ACCESS_TOKEN }}
