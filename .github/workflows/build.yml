@@ -1,0 +1,120 @@
+name: Build, Test, Pack
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CORE_SDK_VERSION: 5.0.100
+  SOLUTION_PATH: './BigEndian System.IO.sln'
+  TEST_RESULTS_PATH: './tests/TestResults/**'
+on:
+  push:
+    branches: [ develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test-x86-job:
+    name: 'Test x86 solution'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ windows-latest, macos-latest ]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Setup .NET Core
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: '${{ env.DOTNET_CORE_SDK_VERSION }}'
+      
+    - name: Install dependencies
+      run: dotnet restore '${{ env.SOLUTION_PATH }}' --verbosity quiet
+
+    - name: Build
+      run: dotnet build '${{ env.SOLUTION_PATH }}' --nologo --verbosity minimal --configuration Release --no-restore
+
+    - name: Test
+      run: dotnet test '${{ env.SOLUTION_PATH }}' --nologo --no-build --logger trx --verbosity normal --configuration Release
+    
+    - name: Save test log to Action
+      uses: actions/upload-artifact@v2
+      with:
+        name: test-logs
+        path: ${{ env.TEST_RESULTS_PATH }}
+        
+  #test-arm-job:
+  #  name: 'Test ARM solution (ubuntu-latest)'
+  #  runs-on: 'ubuntu-latest'
+  #  
+  #  steps:
+  #  - name: Setup ARM Container
+  #    run: docker run --rm --privileged multiarch/qemu-user-static:register --reset
+  #    
+  #  - name: Test ARM Environment
+  #    uses: docker://stefanrbk/arm64:0.0.2
+  #    with:
+  #      args: 'uname -a'
+  #      
+  #  - name: Checkout repository
+  #    uses: actions/checkout@v2
+  #    
+  #  - name: Install dependencies
+  #    uses:  docker://stefanrbk/arm64:0.0.2
+  #    with:
+  #      args: bash -c "dotnet restore '${{env.SOLUTION_PATH }}' --verbosity quiet"
+#
+  #  - name: Build
+  #    uses: docker://stefanrbk/arm64:0.0.2
+  #    with:
+  #      args: bash -c "dotnet build '${{ env.SOLUTION_PATH }}' --nologo --verbosity minimal --configuration Release --no-restore"
+#
+  #  - name: Test
+  #    uses: docker://stefanrbk/arm64:0.0.2
+  #    with:
+  #      args: bash -c "dotnet test '${{ env.SOLUTION_PATH }}' --nologo --no-build --logger trx --verbosity normal --configuration Release"
+  #  
+  #  - name: Save test log to Action
+  #    uses: actions/upload-artifact@v2
+  #    with:
+  #      name: test-logs
+  #      path: ${{ env.TEST_RESULTS_PATH }}
+        
+  final-build-test-pack-job:
+    name: 'Build, Test, and Pack with Ubuntu x86'
+    #needs: [test-x86-job,test-arm-job]
+    needs: [ test-x86-job ]
+    runs-on: 'ubuntu-latest'
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Setup .NET Core
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: '${{ env.DOTNET_CORE_SDK_VERSION }}'
+      
+    - name: Install dependencies
+      run: dotnet restore '${{ env.SOLUTION_PATH }}' --verbosity quiet
+
+    - name: Build
+      run: dotnet build '${{ env.SOLUTION_PATH }}' --nologo --verbosity minimal --configuration Release --no-restore
+
+    - name: Test
+      run: dotnet test '${{ env.SOLUTION_PATH }}' --nologo --no-build --logger trx --verbosity normal --configuration Release
+    
+    - name: Save test log to Action
+      uses: actions/upload-artifact@v2
+      with:
+        name: test-logs
+        path: ${{ env.TEST_RESULTS_PATH }}
+        
+    - name: Pack
+      run: dotnet pack '${{ env.SOLUTION_PATH }}' --output './nuget-packages' --verbosity minimal --configuration Release --no-build
+
+    - name: Save NuGet package to Action
+      uses: actions/upload-artifact@v2
+      with:
+        name: nuget-packages
+        path: './nuget-packages/*/**'
